@@ -16,7 +16,7 @@ typically **cuts the audit bill by 15–25%** and shortens the first review roun
 
 ## What's inside
 
-- **Money-math edge cases** (`src/money-math/`, `tests/`) — 40 boundary tests in exact
+- **Money-math edge cases** (`src/money-math/`, `tests/`) — 42 boundary tests in exact
   `bigint` (no floats), each formula verified against its spec:
   - **Aave-style health factor** — HF exactly `1e18` is solvent; one wei of extra debt flips
     it to liquidatable; zero-debt and division-by-zero handled; max additional borrow vs max-LTV.
@@ -27,9 +27,15 @@ typically **cuts the audit bill by 15–25%** and shortens the first review roun
     favour of the vault); fresh-vault 1:1; degenerate `supply>0, assets==0` rejected; a full
     first-depositor inflation-attack scenario.
   - **Liquidation** — bonus payout and repay/seize amounts, capped at debt.
-- **Real-wallet E2E skeleton** — Playwright + Synpress (MetaMask) against a
-  Tenderly-forked mainnet / Anvil node, driven with `viem`. See
-  [`README-e2e.md`](./README-e2e.md) for setup and how to run it.
+- **Real-wallet E2E skeleton** — Playwright with a MetaMask wallet driver
+  (Synpress wiring documented in [`README-e2e.md`](./README-e2e.md), not yet
+  enabled) against a Tenderly-forked mainnet / Anvil node, driven with `viem`.
+  See [`README-e2e.md`](./README-e2e.md) for setup and how to run it.
+
+> **Wallet E2E is a SKELETON — it has never been run live.** The MetaMask/Synpress
+> driver is not wired: every wallet action throws on purpose, and the wallet specs
+> are `test.fixme`/skip until you wire one. Treat it as scaffolding, not as
+> passing coverage. Details in [`README-e2e.md`](./README-e2e.md).
 
 ## Run it
 
@@ -41,11 +47,11 @@ npm test          # run the unit / money-math suite (vitest)
 npm run typecheck # tsc --noEmit
 ```
 
-Real-wallet E2E (Playwright + Synpress): see [`README-e2e.md`](./README-e2e.md).
+Real-wallet E2E (Playwright + MetaMask driver): see [`README-e2e.md`](./README-e2e.md).
 
 ## Stack
 
-TypeScript · ESM · vitest · Playwright + Synpress (MetaMask) · Tenderly forked
+TypeScript · ESM · vitest · Playwright + MetaMask wallet driver (Synpress wiring documented in README-e2e.md — not yet enabled) · Tenderly forked
 mainnet / Anvil · viem
 
 ## Hire me

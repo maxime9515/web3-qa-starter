@@ -48,6 +48,18 @@ describe("health factor (Aave-style)", () => {
     expect(isLiquidatable(healthFactor(collateral, 0n))).toBe(false);
   });
 
+  it("aggregates multiple collaterals: Σ(value × LT) with different thresholds", () => {
+    // collatA: 1000 × 0.825 → 825; collatB: 500 × 0.5 → 250; Σ = 1075
+    const twoCollaterals = [
+      { valueWad: toWad(1000), liquidationThresholdWad: toWad("0.825") },
+      { valueWad: toWad(500), liquidationThresholdWad: toWad("0.5") },
+    ];
+    // debt = 1000 → HF = 1075 / 1000 = 1.075
+    const hf = healthFactor(twoCollaterals, toWad(1000));
+    expect(fromWad(hf)).toBe("1.075");
+    expect(isLiquidatable(hf)).toBe(false);
+  });
+
   it("max additional borrow respects max-LTV", () => {
     // value 1000, maxLtv 0.75 → capacity 750; debt 500 → 250 room
     const room = maxAdditionalBorrow(

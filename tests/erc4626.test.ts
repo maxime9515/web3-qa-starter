@@ -48,6 +48,21 @@ describe("ERC-4626 conversion (EIP-4626 rounding)", () => {
     expect(() => previewMint(1n, 0n, 5n)).toThrow(/degenerate/);
     expect(() => previewWithdraw(1n, 0n, 5n)).toThrow(/degenerate/);
   });
+
+  it("boundary: supply>0 && assets==0 → convertToAssets/previewRedeem silently return 0", () => {
+    // Unlike convertToShares, the shares→assets path does not throw on this
+    // degenerate state: (shares * 0) / supply floors to 0. Pinned here so the
+    // behaviour is intentional and visible, not an unknown.
+    expect(convertToAssets(1n, 0n, 5n)).toBe(0n);
+    expect(previewRedeem(10n, 0n, 5n)).toBe(0n);
+  });
+
+  it("negative inputs throw in every preview/convert entrypoint", () => {
+    expect(() => convertToShares(-1n, 5n, 5n)).toThrow(/negative assets/);
+    expect(() => convertToAssets(-1n, 5n, 5n)).toThrow(/negative shares/);
+    expect(() => previewMint(-1n, 5n, 5n)).toThrow(/negative shares/);
+    expect(() => previewWithdraw(-1n, 5n, 5n)).toThrow(/negative assets/);
+  });
 });
 
 describe("ERC-4626 deposit/redeem round trip", () => {

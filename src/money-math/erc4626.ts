@@ -54,6 +54,7 @@ export function previewRedeem(shares: bigint, totalAssets: bigint, totalSupply: 
 
 /** previewMint: shares wanted, assets required (rounds UP, favours vault). */
 export function previewMint(shares: bigint, totalAssets: bigint, totalSupply: bigint): bigint {
+  if (shares < 0n) throw new Error("previewMint: negative shares");
   if (totalSupply === 0n) return shares;
   if (totalAssets === 0n) {
     throw new Error("previewMint: vault has supply>0 but assets==0 (degenerate)");
@@ -63,6 +64,7 @@ export function previewMint(shares: bigint, totalAssets: bigint, totalSupply: bi
 
 /** previewWithdraw: assets wanted, shares burned (rounds UP, favours vault). */
 export function previewWithdraw(assets: bigint, totalAssets: bigint, totalSupply: bigint): bigint {
+  if (assets < 0n) throw new Error("previewWithdraw: negative assets");
   if (totalSupply === 0n) return assets;
   if (totalAssets === 0n) {
     throw new Error("previewWithdraw: vault has supply>0 but assets==0 (degenerate)");
