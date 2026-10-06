@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Build / test artifacts
+playwright-report/
+test-results/
+coverage/
+dist/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+*.log
