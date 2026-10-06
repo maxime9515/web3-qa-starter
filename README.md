@@ -1,10 +1,14 @@
 # web3-qa-starter
 
+![banner](assets/banner.svg)
+
 **Tests the flows generic suites skip — wallet-flow E2E + DeFi money-math edge cases.**
 
 A small, readable starter that demonstrates the kind of coverage pre-audit QA for
 DeFi/dApps actually needs: the exact boundaries where funds move, and the wallet
 flows a mocked UI test can never reach.
+
+→ Public write-up: **[docs/case-study.md](./docs/case-study.md)** — problem, approach, and what's in the repo.
 
 ## Why it matters
 
@@ -12,7 +16,8 @@ Protocol audits require evidence that **fund flows are covered** — deposit, bo
 repay, liquidate, withdraw — including the edge cases that decide whether money is
 lost. Most projects arrive with shallow UI tests and no boundary coverage, so auditors
 re-derive behavior themselves and bill for it. Concrete coverage of these flows
-typically **cuts the audit bill by 15–25%** and shortens the first review round.
+can trim the audit bill — commonly **estimated at ~15–25%** (an industry rule of
+thumb, not a guarantee) — and shortens the first review round.
 
 ## What's inside
 
@@ -30,13 +35,17 @@ typically **cuts the audit bill by 15–25%** and shortens the first review roun
 - **Wallet-flow E2E that runs out of the box** (`e2e/`) — `npm run e2e` starts a bundled
   demo dApp and drives the full flow through an injected EIP-1193 **test double**:
   connect → switch network → EIP-712 sign → send tx. Hermetic: no secrets, no network.
-  **Real MetaMask (Synpress) is documented but not wired yet** — see
-  [`README-e2e.md`](./README-e2e.md) for the wiring steps and what a real run needs.
+  A **real-MetaMask/Synpress mode is wired up** (`npm run e2e:real`): a live MetaMask
+  boots and the dApp receives a genuine `isMetaMask` EIP-1193 provider. See
+  [`README-e2e.md`](./README-e2e.md) for what passes and what is blocked.
 
 > **What runs live vs. what doesn't.** `npm test` (42 money-math tests) and `npm run e2e`
-> (5 wallet-flow tests against the bundled demo dApp) both pass with no setup. The **real**
-> MetaMask/Synpress driver is still a documented stub that throws on use; a live real-wallet
-> run needs MetaMask + a forked-mainnet RPC key and is **not green**. Details in
+> (5 wallet-flow tests against the bundled demo dApp) both pass with no setup. The **real
+> MetaMask/Synpress mode is wired up** — `npm run e2e:real` boots a live MetaMask that
+> injects a real EIP-1193 provider, and that test passes. What is **blocked in this
+> environment** is the wallet's **connect/sign approval popups** (MetaMask's
+> `notification.html` never surfaces), so those two tests are visible skips, not passes.
+> A forked-mainnet run additionally needs MetaMask + an RPC key. Details in
 > [`README-e2e.md`](./README-e2e.md).
 
 ## Run it
@@ -54,8 +63,9 @@ Real MetaMask (forked mainnet, wallet extension): see [`README-e2e.md`](./README
 
 ## Stack
 
-TypeScript · ESM · vitest · Playwright (EIP-1193 wallet flows; Synpress wiring documented,
-not yet enabled) · Tenderly forked mainnet / Anvil · viem
+TypeScript · ESM · vitest · Playwright + Synpress (real-MetaMask wallet flows: a live MetaMask
+boots and injects a real EIP-1193 provider; connect/sign approval popups are blocked in this
+environment) · Tenderly forked mainnet / Anvil · viem
 
 ## Hire me
 

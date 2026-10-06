@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-label="pre-audit QA — wallet-flow E2E and DeFi money-math">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0e13"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#1f2937" stroke-width="1" opacity="0.55"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="300" fill="url(#bg)"/>
+  <rect width="1200" height="300" fill="url(#grid)"/>
+
+  <!-- accent bar -->
+  <rect x="64" y="70" width="6" height="28" rx="3" fill="url(#accent)"/>
+
+  <text x="84" y="93" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="20" letter-spacing="3" fill="#7dd3fc">PRE-AUDIT QA</text>
+
+  <text x="64" y="165" font-family="-apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif"
+        font-size="52" font-weight="700" fill="#e5e7eb">wallet-flow E2E + DeFi money-math</text>
+
+  <text x="64" y="212" font-family="-apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif"
+        font-size="22" fill="#9ca3af">Testing the fund-flow boundaries generic suites skip.</text>
+
+  <!-- chips -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15">
+    <rect x="64" y="240" width="150" height="34" rx="17" fill="#0f172a" stroke="#1e3a5f"/>
+    <text x="139" y="262" text-anchor="middle" fill="#7dd3fc">42 money-math</text>
+
+    <rect x="228" y="240" width="170" height="34" rx="17" fill="#0f172a" stroke="#1e3a5f"/>
+    <text x="313" y="262" text-anchor="middle" fill="#7dd3fc">5 wallet-flow E2E</text>
+
+    <rect x="412" y="240" width="290" height="34" rx="17" fill="#0f172a" stroke="#1e3a5f"/>
+    <text x="557" y="262" text-anchor="middle" fill="#7dd3fc">real MetaMask: wired · 1 passing</text>
+  </g>
+
+  <!-- border -->
+  <rect x="0.5" y="0.5" width="1199" height="299" fill="none" stroke="#1f2937"/>
+</svg>

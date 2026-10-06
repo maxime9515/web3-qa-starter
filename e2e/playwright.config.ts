@@ -45,6 +45,9 @@ const useDemoServer = !process.env.E2E_BASE_URL && !hasWalletEnv;
 export default defineConfig({
   testDir: "./specs",
   testMatch: "**/*.spec.ts",
+  // The REAL MetaMask specs (`*.real.spec.ts`) belong to playwright.real.config.ts
+  // and depend on a live MetaMask extension — never run them in the hermetic demo.
+  testIgnore: "**/*.real.spec.ts",
 
   // Wallet flows are stateful (connect → switch → sign → send) and must not
   // race each other.

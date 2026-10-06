@@ -7,21 +7,31 @@ sign, transaction** — with a real browser wallet (MetaMask) against a fork, or
 
 ## Status at a glance
 
-| Mode | What runs | Secrets needed | Live? |
-| --- | --- | --- | --- |
-| **DEMO** (default) | Bundled `demo-dapp/` + injected **EIP-1193 test double** | none | ✅ **5/5 pass** |
-| **REAL** (opt-in) | Your dApp + a real MetaMask wallet on a fork | `E2E_BASE_URL`, `E2E_METAMASK_*`, RPC | ⛔ driver still a stub |
+| Mode | Command | What runs | Secrets | Status |
+| --- | --- | --- | --- | --- |
+| **DEMO** (default) | `npm run e2e` | Bundled `demo-dapp/` + injected **EIP-1193 test double** | none | ✅ **5 passed / 0 skipped** |
+| **REAL** | `npm run e2e:real` | Bundled `demo-dapp/` + a **LIVE MetaMask 13.13.1** extension (Synpress) | none (public test mnemonic) | ⚠️ **1 passed / 2 skipped (blocked)** |
 
 ```bash
-npm run e2e
-# → 5 passed (chromium)   — no secrets, no network, no wallet extension
+npm run e2e            # → 5 passed (chromium) — no secrets, no network, no wallet extension
+npm run e2e:real       # → 1 passed, 2 skipped — boots a real MetaMask (see below)
 ```
 
-> **Honest scope.** The DEMO mode genuinely exercises the dApp's EIP-1193 code
-> path end-to-end (a real `window.ethereum` object, real events, real
-> `request()` round-trips) — but the *provider* is a local test double, **not
-> MetaMask**. Real MetaMask/Synpress wiring is documented below and is **not yet
-> implemented**; the wallet tests skip in REAL mode rather than pretend to pass.
+> **Honest scope.**
+> * **DEMO** genuinely exercises the dApp's EIP-1193 code path end-to-end, but the
+>   *provider* is a local test double, **not** MetaMask.
+> * **REAL** really boots the MetaMask extension (v13.13.1, Synpress' pinned build)
+>   inside a Chromium persistent context; the wallet-setup onboards it from the
+>   **public hardhat/anvil test mnemonic** (`e2e/wallet-setup/basic.setup.ts`). The
+>   passing test verifies that an **unlocked account is present** and that the dApp
+>   receives a **real** `window.ethereum` (`isMetaMask: true`) answering
+>   `eth_chainId`. It does **not** assert the exact account address (the wallet UI
+>   hides it and `eth_accounts` is empty until the dApp is connected — which needs
+>   the blocked approval popup).
+> * The wallet **approval popups** — `connect` and `sign` — are **BLOCKED** in this
+>   environment: MetaMask's `notification.html` popup is never surfaced, so
+>   `metamask.connectToDapp()` / `confirmSignature()` time out. Those two tests are
+>   `test.fixme` (visible skips), **not** passes. Full write-up below.
 
 ---
 
@@ -31,13 +41,18 @@ npm run e2e
 demo-dapp/                 # build-free dApp: connect / switch / sign / send (window.ethereum only)
   index.html, app.js, styles.css
 e2e/
-  playwright.config.ts     # webServer + demo baseURL, chromium project, ENV contract
+  playwright.config.ts     # DEMO config: webServer + demo baseURL, chromium project, ENV contract
+  playwright.real.config.ts# REAL config: boots MetaMask (Synpress), runs *.real.spec.ts only
   static-server.mjs        # dependency-free static server for demo-dapp/ (no `serve` pkg)
-  demo-provider.ts         # ⚠️ EIP-1193 TEST DOUBLE — injected via addInitScript
-  fixtures.ts              # test/expect + DemoWallet / MetaMaskWallet + auto-injection
+  demo-provider.ts         # ⚠️ EIP-1193 TEST DOUBLE — injected via addInitScript (DEMO only)
+  fixtures.ts              # DEMO test/expect + DemoWallet + auto-injection
+  wallet-setup/
+    basic.setup.ts         # Synpress wallet-setup: imports the PUBLIC test mnemonic (REAL)
   specs/
-    wallet-connect.spec.ts # onboarding, connect, switch network, sign, tx
+    wallet-connect.spec.ts      # DEMO: onboarding, connect, switch network, sign, tx
+    wallet-connect.real.spec.ts # REAL: live MetaMask (Synpress metaMaskFixtures)
 tsconfig.e2e.json          # separate TS config for e2e (root tsconfig excludes e2e)
+.cache-synpress/           # git-ignored: downloaded MetaMask extension + cached wallet profile
 ```
 
 `e2e` is deliberately kept **out of the root `tsconfig.json`** — the e2e code
@@ -47,47 +62,161 @@ needs `@playwright/test` types and DOM libs the library config must not carry:
 npm run e2e:typecheck      # tsc -p tsconfig.e2e.json --noEmit
 ```
 
-`@playwright/test` is already installed; browsers only need installing once
-(`npm run e2e:install`; the local cache already has `chromium-1243`).
-
 ---
 
 ## Running
+
+### DEMO (default, hermetic)
 
 ```bash
 npm run e2e        # playwright test --config=e2e/playwright.config.ts
 npm run e2e:demo   # same thing (alias, explicit about the default mode)
 npm run demo:serve # just the demo dApp at http://localhost:4173 (browse it manually)
-npx playwright test --config=e2e/playwright.config.ts --ui
 ```
 
-### Two modes, picked automatically from ENV
+No `E2E_BASE_URL` set → Playwright's `webServer` starts a local static server
+for `demo-dapp/`, `baseURL` points at it, and `fixtures.ts` injects the EIP-1193
+test double into every page *before* any page script runs. **All five tests run
+for real and pass.** The REAL specs (`*.real.spec.ts`) are excluded via
+`testIgnore` so they can never leak into the hermetic run.
 
-- **DEMO (default).** No `E2E_METAMASK_*` set → Playwright's `webServer` starts a
-  local static server for `demo-dapp/`, `baseURL` points at it, and the fixtures
-  inject the EIP-1193 test double into every page *before* any page script runs.
-  All five tests run for real and pass.
-- **REAL (opt-in).** Set `E2E_METAMASK_SEED` + `E2E_METAMASK_PASSWORD` (and
-  `E2E_BASE_URL` to your dApp) → **no** double is injected, the demo server is
-  **not** started, and the wallet tests **skip** with an explicit reason (the
-  Synpress driver is still a stub). The onboarding smoke test only runs if
-  `E2E_BASE_URL` is set. A skip is not a pass — read the report.
+### REAL (live MetaMask via Synpress)
 
-### ENV contract
+```bash
+# one-time setup
+npm run e2e:real:install     # Chromium build for Synpress' pinned playwright-core@1.48.2
+npm run e2e:real:setup       # `synpress e2e/wallet-setup` — downloads MetaMask 13.13.1
+                             # and caches an onboarded profile under .cache-synpress/
+
+# run
+npm run e2e:real             # playwright test --config=e2e/playwright.real.config.ts
+HEADLESS=false npm run e2e:real   # same, with a visible browser window
+```
+
+The REAL config serves the same bundled `demo-dapp/` (unless `E2E_BASE_URL`
+points at your own app), then `e2e/specs/wallet-connect.real.spec.ts` uses
+Synpress' `testWithSynpress(metaMaskFixtures(basicSetup))`. That fixture launches
+a Chromium **persistent context** with the unpacked MetaMask extension loaded and
+restored from the cached, already-onboarded profile, then unlocks it.
+
+> The cached profile is keyed by a hash of the wallet-setup function's source. If
+> you edit `e2e/wallet-setup/basic.setup.ts`, **re-run `npm run e2e:real:setup`** —
+> otherwise you get `Cache for <hash> does not exist`.
+
+---
+
+## Real MetaMask — what works and what is blocked
+
+### ✅ Verified (the passing REAL test)
+
+| Assertion | How |
+| --- | --- |
+| MetaMask 13.13.1 extension boots in a persistent Chromium context | Synpress `metaMaskFixtures` |
+| An **unlocked account is present** (the wallet-setup onboards it from the public hardhat/anvil test mnemonic — `e2e/wallet-setup/basic.setup.ts`) | MetaMask' own home UI shows an account, not the lock screen. The exact account address is **not** asserted (see note). |
+| The dApp receives a **real** EIP-1193 provider | `window.ethereum.isMetaMask === true` |
+| The provider answers a real call | `eth_chainId` returns a live hex chain id |
+
+> **Note on the account.** The wallet is onboarded from the public test mnemonic,
+> but the passing test asserts only that an **unlocked account is present** — not
+> that it equals account #0 of that mnemonic. MetaMask' home UI does not render the
+> address as readable text, and `eth_accounts` returns `[]` until the dApp is
+> connected (which requires the approval popup that is blocked here), so the exact
+> address cannot be asserted reliably in this environment.
+
+### ⛔ Blocked: connect & sign approval popups
+
+`metamask.connectToDapp()` and `metamask.confirmSignature()` fail with:
+
+```
+[getNotificationPageAndWaitForLoad] Notification page did not appear after 10000ms and 2 retries.
+```
+
+Diagnosis (verified with a throwaway instrumentation spec):
+
+* The dApp raises `eth_requestAccounts`; `window.ethereum` is present
+  (`isMetaMask: true`) and MetaMask' MV3 service worker (`scripts/app-init.js`)
+  is alive.
+* **No `notification.html` page/window is ever created** — a `context.on("page")`
+  listener never fires for it, in **both** headless and headed mode, and polled
+  `context.pages()` is unchanged for 15s. So the popup MetaMask uses to approve a
+  connection/signature never surfaces under this Chromium/Playwright setup.
+* This is a MetaMask-UI ↔ automation-environment issue, not a test bug and not a
+  secret/config problem.
+
+`wallet-connect.real.spec.ts` keeps `connect` and `sign` as **`test.fixme`** with
+that reason — a visible, honest skip.
+
+### ⛔ Cache-build flakiness (worked around)
+
+Synpress' `npx synpress <wallet-setup-dir>` cache build is flaky here: its
+onboarding clicks intermittently time out, and its `launchPersistentContext`
+(which passes **both** `--disable-extensions-except` and `--load-extension`) can
+hang. Notes worth keeping:
+
+* MetaMask's Get-Started page only enables the import button once the terms
+  checkbox is ticked; Synpress' `importWallet()` does not tick it — `basic.setup.ts`
+  ticks it first.
+* MetaMask 13.x ends onboarding on a "Your wallet is ready!" screen Synpress does
+  not dismiss — `basic.setup.ts` clicks `onboarding-complete-done`.
+* **Two `playwright-core` versions coexist**: `@playwright/test@1.63` (chromium
+  1243) and Synpress' `playwright-core@1.48.2` (chromium **1140**). The cache is
+  built with 1140 (`npm run e2e:real:install` provides it) — do **not** "unify"
+  them with an npm `override`: chromium 1243 fails to load a fresh unpacked
+  extension in headless and **hangs** in headed mode with
+  `--disable-extensions-except`.
+
+### 🧭 Alternative path (no cache): direct `launchPersistentContext`
+
+If the Synpress cache flow is unusable, the same result is reachable directly —
+launch a persistent context and onboard in-session, using Synpress' own page
+objects:
+
+```ts
+import { chromium } from "@playwright/test";
+import { MetaMask, getExtensionId, unlockForFixture } from "@synthetixio/synpress/playwright";
+import { prepareExtension } from "@synthetixio/synpress-cache";
+
+const extensionPath = await prepareExtension();          // downloads MetaMask if needed
+const context = await chromium.launchPersistentContext(userDataDir, {
+  headless: false,
+  args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
+  // headless: add "--headless=new" — but see the chromium-version caveat above.
+});
+const extensionId = await getExtensionId(context, "MetaMask");
+const walletPage = context.pages()[0] ?? (await context.newPage());
+await walletPage.goto(`chrome-extension://${extensionId}/home.html`);
+const metamask = new MetaMask(context, walletPage, WALLET_PASSWORD, extensionId);
+await metamask.importWallet(SEED_PHRASE);                 // ticks terms + imports
+await unlockForFixture(walletPage, WALLET_PASSWORD);      // unlock
+```
+
+This was verified to onboard a fresh throwaway profile successfully; it is the
+fallback if a future Synpress release regresses the cache flow.
+
+---
+
+## ENV contract
 
 | Var | Meaning | Default |
 | --- | --- | --- |
-| `E2E_BASE_URL` | dApp under test; **its presence disables the demo server** | – (→ demo dApp) |
+| `E2E_BASE_URL` | dApp under test; **its presence disables the demo server** (both configs) | – (→ demo dApp) |
 | `DEMO_DAPP_PORT` | port for the local demo server | `4173` |
 | `E2E_CHAIN_ID` | chain id the suite expects | `1` |
 | `E2E_RPC_URL` | RPC for the anvil/Tenderly fork | – |
-| `E2E_WALLET_ADDRESS` | expected EOA address | – |
-| `E2E_METAMASK_SEED` | wallet seed (REAL mode trigger) | – |
-| `E2E_METAMASK_PASSWORD` | wallet unlock password (REAL mode trigger) | – |
-| `E2E_METAMASK_EXTENSION` | absolute path to unpacked MetaMask ext | – |
+| `E2E_WALLET_ADDRESS` | expected EOA address (only read by the unused real-mode skeleton fixture) | – |
+| `HEADLESS` | REAL mode: `"true"` runs `--headless=new`; default is headless | `true` |
 | `CI` | enables retries, 1 worker, github reporter | – |
 
-Never commit a seed phrase. Pass it as a CI secret / local env var only.
+There is **no seed/password/extension ENV**. The REAL suite needs none: it onboards
+from the **public** hardhat/anvil test mnemonic (`test … junk`) and a throwaway
+password hardcoded in `e2e/wallet-setup/basic.setup.ts` — a throwaway that controls
+no funds. Never commit a real seed phrase.
+
+The REAL config (`playwright.real.config.ts`) sets **`retries: 1`** to absorb an
+environmental flake (MetaMask occasionally tears the browser down mid-run).
+Playwright reports a retry-pass as **flaky**, not as a clean pass — so read the REAL
+result as "1 passed · 2 skipped" only when no `flaky` line appears; a `flaky` line
+means the green came from a retry, not a first-try pass.
 
 ---
 
@@ -101,26 +230,14 @@ Never commit a seed phrase. Pass it as a CI secret / local env var only.
   server, so there is **no `serve`/`http-server` dependency to download**).
 - **`e2e/demo-provider.ts`** is a **deterministic EIP-1193 TEST DOUBLE**, not a
   wallet. It holds **no keys**, stores **no seed**, and makes **no network calls**.
-  It answers `eth_requestAccounts`, `eth_accounts`, `eth_chainId`,
-  `wallet_switchEthereumChain`, `wallet_addEthereumChain`, `eth_sendTransaction`
-  (canned hash), `eth_signTypedData_v4` / `personal_sign` (canned signature) and
-  `eth_getBalance` with constants, and emits `accountsChanged` / `chainChanged`.
   It is injected with `context.addInitScript` by the auto-fixture `demoProvider`.
 
 > ⚠️ The double **fabricates a chain**. Never inject it into a run against a real
-> network, and never treat its signatures or tx hashes as real. Its only job is
-> to be a faithful *protocol* double so the dApp's EIP-1193 handling is covered
-> without a browser wallet.
-
-`DemoWallet` (in `fixtures.ts`) implements the same `WalletController` contract
-as the real driver, but its methods click the demo dApp's real buttons — so the
-tests drive the app's actual UI, not a bypassed shortcut.
+> network, and never treat its signatures or tx hashes as real.
 
 ---
 
 ## Raising a forked mainnet (for the REAL path)
-
-Use [Foundry](https://book.getfoundry.sh) Anvil, or Tenderly Virtual TestNets:
 
 ```bash
 anvil --fork-url "$RPC_URL" --chain-id 1        # fork mainnet through your RPC
@@ -128,36 +245,7 @@ anvil --fork-url "$RPC_URL" --chain-id 1        # fork mainnet through your RPC
 export E2E_RPC_URL="https://virtual.mainnet.rpc.tenderly.co/<id>"
 ```
 
-Then point the dApp at the same fork and set `E2E_BASE_URL`. A fork gives real
-token balances and contract code without spending mainnet gas.
-
----
-
-## Wiring a real MetaMask wallet (Synpress) — NOT done yet
-
-Synpress is intentionally **not** a dependency of this repo (heavy; pins its own
-Playwright + MetaMask build). Install it only when you want a real run:
-
-```bash
-npm i -D @synthetixio/synpress
-npx synpress install-metamask       # downloads the pinned MetaMask extension
-```
-
-Then replace the stub bodies in `MetaMaskWallet` (`e2e/fixtures.ts`):
-
-1. **Boot context** — MetaMask needs a *persistent* context with the unpacked
-   extension loaded (`--disable-extensions-except` + `--load-extension`, pointed
-   at `E2E_METAMASK_EXTENSION` or Synpress's path), via
-   `chromium.launchPersistentContext(userDataDir, { args })` or Synpress's
-   `testWithSynpress` / `metaMaskFixtures` wrapper.
-2. **`unlock()`** — import `E2E_METAMASK_SEED`, set `E2E_METAMASK_PASSWORD`.
-3. **`connect(page)`** — click the dApp's connect button, confirm in the popup.
-4. **`switchNetwork(page, chainId)`** — add the fork network if unknown, switch.
-5. **`signTypedData` / `approveTransaction`** — click Sign / Confirm in the popup.
-
-Because those bodies are contract-checked by `WalletController`, wiring them is
-a drop-in replacement — the spec files do not change. The exact Synpress API
-varies by major version; verify against its docs and never assume a stub passed.
+Then point the dApp at the same fork and set `E2E_BASE_URL`.
 
 ---
 
@@ -178,9 +266,9 @@ jobs:
       - run: npm run e2e
 ```
 
-This green run is **real**: the demo dApp is served and driven by the injected
-double. For the REAL path, add `E2E_BASE_URL` + `E2E_METAMASK_*` secrets and a
-fork — without them the wallet tests skip, and the job stays honest.
+The DEMO job stays hermetic and green. `npm run e2e:real` needs a network fetch
+of the MetaMask extension and is not wired into CI; its connect/sign popups are
+blocked in this environment (above).
 
 ---
 
@@ -190,7 +278,9 @@ fork — without them the wallet tests skip, and the job stays honest.
 | --- | --- |
 | `npm run e2e:typecheck` | ✅ passes |
 | `npm run e2e` (DEMO: demo dApp + injected EIP-1193 test double) | ✅ **5 passed / 0 skipped** |
-| connect / switch / sign / send against the demo dApp | ✅ run live, asserted |
+| `npm run e2e:real` — live MetaMask boots + is unlocked (account present) + injects a real EIP-1193 provider | ✅ **1 passed** |
+| REAL `connect` (approval popup) | ⛔ **blocked** — MetaMask notification popup never surfaces (`test.fixme`) |
+| REAL `sign` (approval popup) | ⛔ **blocked** — same root cause (`test.fixme`) |
+| REAL `switchNetwork` / `tx` | — **not implemented in the real spec** (DEMO only; the real suite covers `connect` + `sign`) |
 | Static server path-traversal guard | ✅ 403/404 (verified with curl) |
-| Real MetaMask connect / switch / sign / tx | ⛔ **stub only — never run live** |
-| Forked-mainnet run with a real wallet | ⛔ requires fork + dApp + RPC key + Synpress |
+| Forked-mainnet run with a real wallet | ⛔ requires fork + dApp + RPC key |

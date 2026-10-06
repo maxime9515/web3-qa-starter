@@ -12,6 +12,11 @@ dist/
 .env.*
 !.env.example
 
+# Synpress wallet-profile cache (throwaway MetaMask profile) + downloaded ext
+.cache-synpress/
+e2e/test-results-real/
+e2e/playwright-report-real/
+
 # Editor / OS
 .DS_Store
 *.log
