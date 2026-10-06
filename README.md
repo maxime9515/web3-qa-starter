@@ -62,7 +62,7 @@ not yet enabled) · Tenderly forked mainnet / Anvil · viem
 Pre-audit QA for DeFi/dApps — real-wallet E2E, fund-flow and money-math coverage,
 audit-ready test reports. Background: 8 years QA, iGaming money-math, Web3.
 
-**Contact:** _[add contact handle here — email / Telegram / booking link]_
+**Contact:** m.lichkovsky@gmail.com · Telegram [@skinny_white](https://t.me/skinny_white)
 
 ## License
 

@@ -3,8 +3,14 @@
   "version": "0.1.0",
   "private": false,
   "type": "module",
-  "description": "Test the flows generic suites skip: real-wallet E2E + DeFi money-math edge cases.",
+  "description": "Tests the flows generic suites skip: wallet-flow E2E + DeFi money-math edge cases.",
   "license": "MIT",
+  "author": "Maxim (https://github.com/maxime9515)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maxime9515/web3-qa-starter.git"
+  },
+  "homepage": "https://github.com/maxime9515/web3-qa-starter",
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
