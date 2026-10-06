@@ -1,89 +1,82 @@
 /**
- * Example real-wallet spec (SKELETON).
+ * Wallet E2E spec.
  *
- * These tests only run for real when a dApp is reachable at E2E_BASE_URL and a
- * MetaMask driver is wired (see README-e2e.md). Without that they SKIP with an
- * explicit reason — never green-wash a run that didn't test anything.
+ * DEMO MODE (default): runs for REAL against the local demo dApp
+ * (demo-dapp/) with a deterministic EIP-1193 test double injected by the
+ * fixtures. connect / switch / sign / send all actually execute and assert.
+ * No secrets, no wallet extension, no RPC — so `npm run e2e` passes out of
+ * the box.
  *
- * NOTE: the happy-path tests are `test.fixme` because the wallet fixture is a
- * documented stub (every action throws). Remove the fixme once Synpress is
- * wired; the skip-guards below stay, so a CI without a wallet still passes.
+ * REAL MODE (E2E_METAMASK_SEED + E2E_METAMASK_PASSWORD set): the double is NOT
+ * injected and the wallet tests SKIP with an explicit reason — the MetaMask
+ * /Synpress driver is still a documented stub (see README-e2e.md). A skip is
+ * not a pass; do not green-wash it.
  */
-import { expect, hasAppUrl, hasWalletEnv, readWalletEnv, test } from "../fixtures";
+import { expect, hasAppUrl, test, walletMode } from "../fixtures";
+import {
+  DEMO_ADDRESS,
+  DEMO_CHAIN_ID,
+  DEMO_SIGNATURE,
+  DEMO_SWITCH_CHAIN_ID,
+  DEMO_TX_HASH,
+} from "../demo-provider";
 
-const env = readWalletEnv();
-const appUp = hasAppUrl();
-const walletUp = hasWalletEnv(env);
+const demo = walletMode() === "demo";
+const REAL_SKIP =
+  "Real MetaMask driver is not wired (stub) — see README-e2e.md. " +
+  "Run without E2E_METAMASK_* to exercise the demo dApp + injected EIP-1193 test double.";
 
-test.describe("pre-audit: real-wallet connect flow", () => {
+test.describe("wallet connect flow", () => {
   test.beforeEach(async ({ page }) => {
-    test.skip(!appUp, "No E2E_BASE_URL — point it at your dApp (or a local fork UI).");
+    // Real mode with no E2E_BASE_URL has no target to load — skip before navigating.
+    test.skip(!hasAppUrl(), "No E2E_BASE_URL — real mode has no default dApp target.");
     await page.goto("/");
   });
 
-  test("dApp onboarding loads and exposes a connect entrypoint", async ({ page }) => {
-    // This assertion is generic on purpose: it works on a blank starter page and
-    // on a real dApp. Tighten the selector for your app.
+  test("dApp loads and exposes a connect entrypoint", async ({ page }) => {
     await expect(page).toHaveTitle(/.+/);
     await expect(page.locator("body")).toBeVisible();
-
-    const connect = page.getByRole("button", { name: /connect.*wallet/i });
-    // The starter repo ships no dApp of its own; when E2E_BASE_URL points at a
-    // real one it MUST expose a connect entrypoint, so this is a real assertion
-    // that can fail. If your app genuinely has none, tighten the selector
-    // instead of green-washing a no-op check.
-    if ((await connect.count()) === 0) {
-      test.skip(true, "No 'Connect Wallet' button matched on this page — tighten the selector for your dApp.");
-    }
-    await expect(connect.first()).toBeEnabled();
+    await expect(page.getByRole("button", { name: /connect.*wallet/i }).first()).toBeEnabled();
   });
 
-  test.fixme("connect wallet: dApp → MetaMask approval → address shown", async ({ page, wallet }) => {
-    test.skip(!walletUp, "Set E2E_METAMASK_SEED + E2E_METAMASK_PASSWORD to run the real wallet.");
-    await wallet.unlock();
+  test("connect wallet: dApp → provider approval → address shown", async ({ page, wallet }) => {
+    test.skip(!demo, REAL_SKIP);
+
     await wallet.connect(page);
-    await expect(page.getByText(wallet.address, { exact: false })).toBeVisible();
+
+    // The address the provider handed back must be rendered by the dApp.
+    await expect(page.getByTestId("address")).toHaveText(DEMO_ADDRESS);
+    // Scoped to the wallet panel — the address string also appears in the event log.
+    await expect(page.locator("#wallet-info").getByText(DEMO_ADDRESS)).toBeVisible();
   });
 
-  test.fixme("switch network: wallet lands on E2E_CHAIN_ID", async ({ page, wallet }) => {
-    test.skip(!walletUp, "Set E2E_METAMASK_SEED + E2E_METAMASK_PASSWORD to run the real wallet.");
-    await wallet.unlock();
+  test("switch network: dApp reflects the new chain id", async ({ page, wallet }) => {
+    test.skip(!demo, REAL_SKIP);
+
     await wallet.connect(page);
-    await wallet.switchNetwork(page, env.chainId);
-    // The dApp should reflect the new chain, e.g. a chain-name badge.
-    await expect(page.getByText(new RegExp(String(env.chainId)))).toBeVisible();
+    await expect(page.getByTestId("chain-id")).toHaveText(String(DEMO_CHAIN_ID));
+
+    await wallet.switchNetwork(page, DEMO_SWITCH_CHAIN_ID);
+    await expect(page.getByTestId("chain-id")).toHaveText(String(DEMO_SWITCH_CHAIN_ID));
   });
 
-  test.fixme("sign: EIP-712 pre-audit signature is produced", async ({ page, wallet }) => {
-    test.skip(!walletUp, "Set E2E_METAMASK_SEED + E2E_METAMASK_PASSWORD to run the real wallet.");
-    await wallet.unlock();
+  test("sign: EIP-712 typed-data signature is produced", async ({ page, wallet }) => {
+    test.skip(!demo, REAL_SKIP);
+
     await wallet.connect(page);
 
-    const typedData = {
-      domain: { name: "PreAudit", version: "1", chainId: env.chainId },
-      types: {
-        Audit: [
-          { name: "target", type: "address" },
-          { name: "nonce", type: "uint256" },
-        ],
-      },
-      primaryType: "Audit",
-      message: { target: wallet.address, nonce: 1 },
-    };
-
-    const signature = await wallet.signTypedData(page, typedData);
+    const signature = await wallet.signTypedData(page, { domain: { name: "PreAudit" } });
     expect(signature).toMatch(/^0x[0-9a-f]+$/i);
+    expect(signature).toBe(DEMO_SIGNATURE);
+    await expect(page.getByTestId("signature")).toHaveText(DEMO_SIGNATURE);
   });
 
-  test.fixme("tx: approve a transaction on a forked mainnet (anvil --fork-url $RPC)", async ({
-    page,
-    wallet,
-  }) => {
-    test.skip(!walletUp, "Set E2E_METAMASK_SEED + E2E_METAMASK_PASSWORD to run the real wallet.");
-    test.skip(!env.rpcUrl, "Set E2E_RPC_URL to the fork you want the tx confirmed on.");
-    await wallet.unlock();
+  test("tx: approve a transaction returns a hash", async ({ page, wallet }) => {
+    test.skip(!demo, REAL_SKIP);
+
     await wallet.connect(page);
     await wallet.approveTransaction(page);
-    await expect(page.getByText(/success|confirmed/i)).toBeVisible({ timeout: 30_000 });
+
+    await expect(page.getByTestId("tx-hash")).toHaveText(DEMO_TX_HASH);
   });
 });

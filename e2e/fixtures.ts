@@ -1,21 +1,32 @@
 /**
- * Real-wallet fixtures for the pre-audit DeFi E2E suite.
+ * Playwright fixtures for the E2E suite.
  *
- * WHAT IS REAL HERE (type-checked, runs):
- *   - the ENV contract (readWalletEnv / hasWalletEnv / hasAppUrl)
- *   - the WalletController interface and the fixture wiring around it
+ * TWO MODES, chosen automatically from ENV:
  *
- * WHAT IS A SKELETON — NOT verified live:
- *   - the MetaMask / Synpress driver. Synpress is intentionally NOT a
- *     dependency of this repo (heavy, pulls its own Playwright + a pinned
- *     MetaMask build). See README-e2e.md → "Wiring a real MetaMask wallet"
- *     for the exact install/setup. Every WalletController method below is a
- *     documented stub that throws WalletNotConfiguredError until you wire one
- *     (Synpress or an equivalent driver). They have never been executed here.
+ *   DEMO MODE (default — no secrets):
+ *     Playwright's webServer serves `demo-dapp/` locally and a deterministic
+ *     EIP-1193 TEST DOUBLE (`e2e/demo-provider.ts`) is injected into the
+ *     browser before any page script runs. connect / switch / sign / send all
+ *     execute for real against the dApp — offline, deterministic, no keys, no
+ *     RPC. `npm run e2e` exercises this out of the box and it PASSES.
+ *
+ *   REAL MODE (E2E_METAMASK_SEED + E2E_METAMASK_PASSWORD set):
+ *     NO double is injected — behaviour is as before. The MetaMask/Synpress
+ *     driver is still a documented stub (see README-e2e.md); the wallet specs
+ *     skip with an explicit reason rather than pretend to pass.
  */
 import { test as base, expect, type Page } from "@playwright/test";
+import { DEMO_ADDRESS, DEMO_CHAIN_ID, demoProviderInitScript } from "./demo-provider";
 
-/** Thrown by every wallet action until a real driver is wired in. */
+export {
+  DEMO_ADDRESS,
+  DEMO_CHAIN_ID,
+  DEMO_SWITCH_CHAIN_ID,
+  DEMO_TX_HASH,
+  DEMO_SIGNATURE,
+} from "./demo-provider";
+
+/** Thrown by every real-wallet action until a real driver is wired in. */
 export class WalletNotConfiguredError extends Error {
   constructor(action: string) {
     super(
@@ -60,9 +71,19 @@ export function hasWalletEnv(env: WalletEnv = readWalletEnv()): boolean {
   return env.seedPhrase.length > 0 && env.password.length > 0;
 }
 
-/** True when a dApp target is explicitly configured (E2E_BASE_URL set). */
+/**
+ * Which suite is in play:
+ *   "real" when a real-wallet ENV is present, otherwise "demo".
+ */
+export type WalletMode = "demo" | "real";
+
+export function walletMode(env: WalletEnv = readWalletEnv()): WalletMode {
+  return hasWalletEnv(env) ? "real" : "demo";
+}
+
+/** True when a dApp target is reachable (demo server, or an explicit E2E_BASE_URL). */
 export function hasAppUrl(): boolean {
-  return Boolean(process.env.E2E_BASE_URL);
+  return Boolean(process.env.E2E_BASE_URL) || walletMode() === "demo";
 }
 
 export interface WalletController {
@@ -86,9 +107,9 @@ export interface WalletController {
 }
 
 /**
- * Skeleton implementation. Compiles and can be constructed, but every action
- * throws until a real driver replaces the bodies. The TODO comments spell out
- * exactly what Synpress calls go here.
+ * REAL-MODE controller — SKELETON. Compiles and can be constructed, but every
+ * action throws until a real driver (Synpress or equivalent) replaces the
+ * bodies. The TODO comments spell out exactly what Synpress calls go here.
  */
 export class MetaMaskWallet implements WalletController {
   readonly address: string;
@@ -127,24 +148,71 @@ export class MetaMaskWallet implements WalletController {
   }
 }
 
+/**
+ * DEMO-MODE controller. Drives the demo dApp through its real UI; the EIP-1193
+ * test double (injected by the `demoProvider` auto-fixture) answers every
+ * request. No wallet extension, no keys, no network.
+ */
+export class DemoWallet implements WalletController {
+  readonly address = DEMO_ADDRESS;
+  readonly chainId = DEMO_CHAIN_ID;
+
+  /** No onboarding: the double is already present via addInitScript. */
+  async unlock(): Promise<void> {
+    /* no-op by design */
+  }
+
+  async connect(page: Page): Promise<void> {
+    await page.getByRole("button", { name: /connect.*wallet/i }).first().click();
+  }
+
+  async switchNetwork(page: Page, _chainId: number): Promise<void> {
+    await page.getByRole("button", { name: /switch/i }).first().click();
+  }
+
+  async signTypedData(page: Page, _typedData: unknown): Promise<string> {
+    await page.getByRole("button", { name: /sign/i }).first().click();
+    return (await page.locator("#signature").textContent())?.trim() ?? "";
+  }
+
+  async approveTransaction(page: Page): Promise<void> {
+    await page.getByRole("button", { name: /send.*transaction/i }).first().click();
+  }
+}
+
 type WalletFixtures = {
+  walletMode: WalletMode;
   walletEnv: WalletEnv;
   wallet: WalletController;
+  /** Auto-fixture: injects the EIP-1193 test double in demo mode only. */
+  demoProvider: void;
 };
 
 /**
  * Extended test. Import `{ test, expect }` from this file, never directly
- * from @playwright/test, so specs get the wallet fixtures.
- *
- * The wallet fixture is lazy: constructing it does not touch MetaMask, so
- * specs that skip on missing ENV still type-check and run to the skip.
+ * from @playwright/test, so specs get the wallet fixtures + demo injection.
  */
 export const test = base.extend<WalletFixtures>({
+  walletMode: async ({}, use) => {
+    await use(walletMode());
+  },
+
   walletEnv: async ({}, use) => {
     await use(readWalletEnv());
   },
+
+  demoProvider: [
+    async ({ context, walletEnv }, use) => {
+      if (walletMode(walletEnv) === "demo") {
+        await context.addInitScript({ content: demoProviderInitScript() });
+      }
+      await use();
+    },
+    { auto: true },
+  ],
+
   wallet: async ({ walletEnv }, use) => {
-    await use(new MetaMaskWallet(walletEnv));
+    await use(walletMode(walletEnv) === "demo" ? new DemoWallet() : new MetaMaskWallet(walletEnv));
   },
 });
 

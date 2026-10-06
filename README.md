@@ -1,9 +1,9 @@
 # web3-qa-starter
 
-**Tests the flows generic suites skip — real-wallet E2E + DeFi money-math edge cases.**
+**Tests the flows generic suites skip — wallet-flow E2E + DeFi money-math edge cases.**
 
 A small, readable starter that demonstrates the kind of coverage pre-audit QA for
-DeFi/dApps actually needs: the exact boundaries where funds move, and the real-wallet
+DeFi/dApps actually needs: the exact boundaries where funds move, and the wallet
 flows a mocked UI test can never reach.
 
 ## Why it matters
@@ -27,15 +27,17 @@ typically **cuts the audit bill by 15–25%** and shortens the first review roun
     favour of the vault); fresh-vault 1:1; degenerate `supply>0, assets==0` rejected; a full
     first-depositor inflation-attack scenario.
   - **Liquidation** — bonus payout and repay/seize amounts, capped at debt.
-- **Real-wallet E2E skeleton** — Playwright with a MetaMask wallet driver
-  (Synpress wiring documented in [`README-e2e.md`](./README-e2e.md), not yet
-  enabled) against a Tenderly-forked mainnet / Anvil node, driven with `viem`.
-  See [`README-e2e.md`](./README-e2e.md) for setup and how to run it.
+- **Wallet-flow E2E that runs out of the box** (`e2e/`) — `npm run e2e` starts a bundled
+  demo dApp and drives the full flow through an injected EIP-1193 **test double**:
+  connect → switch network → EIP-712 sign → send tx. Hermetic: no secrets, no network.
+  **Real MetaMask (Synpress) is documented but not wired yet** — see
+  [`README-e2e.md`](./README-e2e.md) for the wiring steps and what a real run needs.
 
-> **Wallet E2E is a SKELETON — it has never been run live.** The MetaMask/Synpress
-> driver is not wired: every wallet action throws on purpose, and the wallet specs
-> are `test.fixme`/skip until you wire one. Treat it as scaffolding, not as
-> passing coverage. Details in [`README-e2e.md`](./README-e2e.md).
+> **What runs live vs. what doesn't.** `npm test` (42 money-math tests) and `npm run e2e`
+> (5 wallet-flow tests against the bundled demo dApp) both pass with no setup. The **real**
+> MetaMask/Synpress driver is still a documented stub that throws on use; a live real-wallet
+> run needs MetaMask + a forked-mainnet RPC key and is **not green**. Details in
+> [`README-e2e.md`](./README-e2e.md).
 
 ## Run it
 
@@ -43,16 +45,17 @@ Requires Node 22+.
 
 ```bash
 npm i
-npm test          # run the unit / money-math suite (vitest)
+npm test          # 42 money-math boundary tests (vitest)
+npm run e2e       # 5 wallet-flow E2E tests vs the bundled demo dApp (Playwright)
 npm run typecheck # tsc --noEmit
 ```
 
-Real-wallet E2E (Playwright + MetaMask driver): see [`README-e2e.md`](./README-e2e.md).
+Real MetaMask (forked mainnet, wallet extension): see [`README-e2e.md`](./README-e2e.md).
 
 ## Stack
 
-TypeScript · ESM · vitest · Playwright + MetaMask wallet driver (Synpress wiring documented in README-e2e.md — not yet enabled) · Tenderly forked
-mainnet / Anvil · viem
+TypeScript · ESM · vitest · Playwright (EIP-1193 wallet flows; Synpress wiring documented,
+not yet enabled) · Tenderly forked mainnet / Anvil · viem
 
 ## Hire me
 

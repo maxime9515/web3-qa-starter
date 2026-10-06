@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>web3-qa-starter · demo dApp</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>web3-qa-starter · demo dApp</h1>
+      <p class="muted">
+        A build-free, dependency-free dApp. It talks to <code>window.ethereum</code>
+        (EIP-1193) only — no CDN, no bundler, no network calls.
+      </p>
+    </header>
+
+    <main>
+      <p id="provider-state" role="status">Checking for an EIP-1193 provider…</p>
+
+      <button id="connect" type="button">Connect Wallet</button>
+
+      <section id="wallet-info" hidden>
+        <dl>
+          <div>
+            <dt>Address</dt>
+            <dd><span id="address" data-testid="address"></span></dd>
+          </div>
+          <div>
+            <dt>Chain ID</dt>
+            <dd><span id="chain-id" data-testid="chain-id"></span></dd>
+          </div>
+        </dl>
+      </section>
+
+      <section id="actions" hidden>
+        <button id="switch" type="button">Switch network</button>
+        <button id="sign" type="button">Sign typed data</button>
+        <button id="send" type="button">Send transaction</button>
+      </section>
+
+      <section id="results">
+        <p>Signature: <span id="signature" data-testid="signature"></span></p>
+        <p>Tx hash: <span id="tx-hash" data-testid="tx-hash"></span></p>
+      </section>
+
+      <pre id="log" aria-label="event log"></pre>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

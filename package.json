@@ -10,6 +10,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "e2e": "playwright test --config=e2e/playwright.config.ts",
+    "e2e:demo": "playwright test --config=e2e/playwright.config.ts",
+    "demo:serve": "node e2e/static-server.mjs",
     "e2e:typecheck": "tsc -p tsconfig.e2e.json --noEmit",
     "e2e:install": "playwright install chromium"
   },

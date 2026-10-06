@@ -1,35 +1,56 @@
 /**
- * Playwright config for the real-wallet E2E suite.
+ * Playwright config for the E2E suite.
  *
- * Scope: this config is the SKELETON for the "real wallet on a forked mainnet"
- * flow. It runs as-is against a plain chromium browser; the MetaMask /
- * Synpress wallet wiring is opt-in via ENV (see e2e/fixtures.ts and
- * README-e2e.md). Nothing here forces Synpress to be installed.
+ * TWO WAYS TO RUN
+ * ---------------
+ * 1) DEMO (default — no secrets, no network): Playwright's `webServer` boots a
+ *    tiny local static server for `demo-dapp/` and `baseURL` defaults to it;
+ *    fixtures inject a deterministic EIP-1193 TEST DOUBLE. This is what
+ *    `npm run e2e` does out of the box — it PASSES.
+ *
+ * 2) REAL WALLET (opt-in via ENV): set E2E_BASE_URL to your dApp (and
+ *    E2E_METAMASK_* for the wallet). The demo server is then NOT started and
+ *    the run targets your app. The MetaMask/Synpress driver is still a stub —
+ *    see README-e2e.md.
  *
  * ENV contract
  * ------------
- *   E2E_BASE_URL              dApp URL under test (default http://localhost:3000)
- *   E2E_CHAIN_ID              chain id the wallet should be on (default 1)
+ *   E2E_BASE_URL              dApp URL under test (default: the demo server)
+ *   DEMO_DAPP_PORT            port for the local demo server (default 4173)
+ *   E2E_CHAIN_ID              chain id the suite expects (default 1)
  *   E2E_RPC_URL               RPC the app/anvil fork is reachable at (optional)
- *   E2E_METAMASK_SEED         seed phrase for the wallet (see README for safe handling)
- *   E2E_METAMASK_PASSWORD     wallet unlock password
- *   E2E_METAMASK_EXTENSION    absolute path to an unpacked MetaMask extension (optional)
- *   CI                        when set, retries + fewer workers
+ *   E2E_WALLET_ADDRESS        expected EOA address (real mode)
+ *   E2E_METAMASK_SEED         seed phrase for a real wallet (real mode)
+ *   E2E_METAMASK_PASSWORD     wallet unlock password (real mode)
+ *   E2E_METAMASK_EXTENSION    absolute path to unpacked MetaMask ext (optional)
+ *   CI                        when set, retries + 1 worker
  */
 import { defineConfig, devices } from "@playwright/test";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
+const HERE = dirname(fileURLToPath(import.meta.url));
 const isCI = Boolean(process.env.CI);
+
+const DEMO_PORT = Number(process.env.DEMO_DAPP_PORT ?? 4173);
+const DEMO_URL = `http://localhost:${DEMO_PORT}/`;
+
+// Real target wins; otherwise the locally-served demo dApp.
+const baseURL = process.env.E2E_BASE_URL ?? DEMO_URL;
+
+// Start the demo server only in DEMO mode (no explicit dApp URL, no real wallet ENV).
+const hasWalletEnv = Boolean(process.env.E2E_METAMASK_SEED && process.env.E2E_METAMASK_PASSWORD);
+const useDemoServer = !process.env.E2E_BASE_URL && !hasWalletEnv;
 
 export default defineConfig({
   testDir: "./specs",
   testMatch: "**/*.spec.ts",
 
-  // Wallet flows are stateful (onboarding → connect → sign) and must not race
-  // each other against a single MetaMask instance.
+  // Wallet flows are stateful (connect → switch → sign → send) and must not
+  // race each other.
   fullyParallel: false,
   workers: isCI ? 1 : undefined,
 
-  // A real-wallet flow is slower than a DOM click: extension boot + RPC round-trips.
   timeout: 60_000,
   expect: { timeout: 10_000 },
 
@@ -40,8 +61,22 @@ export default defineConfig({
 
   outputDir: "./test-results",
 
+  // Local, dependency-free static server for demo-dapp/ (see e2e/static-server.mjs).
+  // Skipped entirely when you point E2E_BASE_URL at your own dApp.
+  webServer: useDemoServer
+    ? {
+        command: `node "${join(HERE, "static-server.mjs")}"`,
+        url: DEMO_URL,
+        reuseExistingServer: !isCI,
+        timeout: 30_000,
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { DEMO_DAPP_PORT: String(DEMO_PORT) },
+      }
+    : undefined,
+
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
+    baseURL,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
@@ -56,7 +91,7 @@ export default defineConfig({
     },
     // NOTE: a real MetaMask run needs a *persistent* context with the unpacked
     // extension loaded (chromium.launchPersistentContext + --load-extension).
-    // That is provided by the Synpress wrapper / the custom launch in
-    // e2e/fixtures.ts, not by this stock project. See README-e2e.md.
+    // That is provided by the Synpress wrapper / a custom launch, not by this
+    // stock project. See README-e2e.md.
   ],
 });
